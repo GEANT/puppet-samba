@@ -35,8 +35,7 @@
 #
 # Copyright 2015 Pierre-Francois Carpentier, unless otherwise noted.
 #
-
-class samba::classic(
+class samba::classic (
   $smbname                        = undef,
   $domain                         = undef,
   $realm                          = undef,
@@ -57,19 +56,13 @@ class samba::classic(
   $joinou                         = undef,
   Optional[String] $default_realm = undef,
   Array $additional_realms        = [],
-) inherits samba::params{
-
-
-  unless is_domain_name($realm){
-    fail('realm must be a valid domain')
-  }
-
-  unless is_domain_name($realm){
+) inherits samba::params {
+  if $realm !~ Stdlib::Fqdn {
     fail('realm must be a valid domain')
   }
 
   validate_slength($smbname, 15)
-  unless is_domain_name("${smbname}.${realm}"){
+  if "${smbname}.${realm}" !~ Stdlib::Fqdn {
     fail('smbname must be a valid domain')
   }
 
@@ -83,10 +76,9 @@ class samba::classic(
   $checksecurity = ['ads', 'auto', 'user', 'domain']
   $checksecuritystr = join($checksecurity, ', ')
 
-  unless member($checksecurity, downcase($security)){
+  unless member($checksecurity, downcase($security)) {
     fail("role must be in [${checksecuritystr}]")
   }
-
 
   $realmlowercase = downcase($realm)
   $realmuppercase = upcase($realm)
@@ -94,20 +86,19 @@ class samba::classic(
 
   $_default_realm = pick($default_realm, $realmuppercase)
 
-
   file { '/etc/samba/':
     ensure  => 'directory',
   }
 
   file { '/etc/samba/smb_path':
-    ensure  => 'present',
+    ensure  => present,
     content => $samba::params::smbconffile,
     require => File['/etc/samba/'],
   }
 
   if $join_domain {
     if $krbconf {
-      file {$samba::params::krbconffile:
+      file { $samba::params::krbconffile:
         ensure  => present,
         mode    => '0644',
         content => template("${module_name}/krb5.conf.erb"),
@@ -116,12 +107,12 @@ class samba::classic(
     }
 
     if $nsswitch {
-      package{ 'SambaNssWinbind':
+      package { 'SambaNssWinbind':
         ensure => 'installed',
-        name   => $samba::params::packagesambansswinbind
+        name   => $samba::params::packagesambansswinbind,
       }
 
-      augeas{'samba nsswitch group':
+      augeas { 'samba nsswitch group':
         context => "/files/${samba::params::nsswitchconffile}/",
         changes => [
           'ins service after "*[self::database = \'group\']/service[1]/"',
@@ -131,7 +122,7 @@ class samba::classic(
         lens    => 'Nsswitch.lns',
         incl    => $samba::params::nsswitchconffile,
       }
-      augeas{'samba nsswitch passwd':
+      augeas { 'samba nsswitch passwd':
         context => "/files/${samba::params::nsswitchconffile}/",
         changes => [
           'ins service after "*[self::database = \'passwd\']/service[1]/"',
@@ -148,9 +139,9 @@ class samba::classic(
       # or nss and pam aren't both enabled, to avoid duplicate definition.
       if ($samba::params::packagesambapamwinbind != $samba::params::packagesambansswinbind)
       or !$nsswitch {
-        package{ 'SambaPamWinbind':
+        package { 'SambaPamWinbind':
           ensure => 'installed',
-          name   => $::samba::params::packagesambapamwinbind
+          name   => $samba::params::packagesambapamwinbind,
         }
       }
 
@@ -167,7 +158,7 @@ class samba::classic(
         control   => 'sufficient',
         module    => 'pam_winbind.so',
         arguments => $winbindauthargs,
-        position  => 'before module pam_deny.so'
+        position  => 'before module pam_deny.so',
       }
 
       pam { 'samba pam winbind account':
@@ -177,7 +168,7 @@ class samba::classic(
         control   => 'required',
         module    => 'pam_winbind.so',
         arguments => 'use_first_pass',
-        position  => 'before module pam_deny.so'
+        position  => 'before module pam_deny.so',
       }
 
       pam { 'samba pam winbind session':
@@ -186,7 +177,7 @@ class samba::classic(
         type     => 'session',
         control  => 'optional',
         module   => 'pam_winbind.so',
-        position => 'after module pam_unix.so'
+        position => 'after module pam_unix.so',
       }
 
       pam { 'samba pam winbind password':
@@ -196,18 +187,18 @@ class samba::classic(
         control   => 'sufficient',
         module    => 'pam_winbind.so',
         arguments => ['use_authtok', 'try_first_pass'],
-        position  => 'before module pam_deny.so'
+        position  => 'before module pam_deny.so',
       }
     }
   }
 
-  package{ 'SambaClassic':
+  package { 'SambaClassic':
     ensure => 'installed',
     name   => $samba::params::packagesambaclassic,
   }
 
   if $manage_winbind {
-    package{ 'SambaClassicWinBind':
+    package { 'SambaClassicWinBind':
       ensure  => 'installed',
       name    => $samba::params::packagesambawinbind,
       require => File['/etc/samba/smb_path'],
@@ -215,24 +206,24 @@ class samba::classic(
     Package['SambaClassicWinBind'] -> Package['SambaClassic']
   }
 
-  service{ 'SambaSmb':
+  service { 'SambaSmb':
     ensure  => 'running',
     name    => $samba::params::servivesmb,
-    require => [ Package['SambaClassic'], File['SambaOptsFile'] ],
+    require => [Package['SambaClassic'], File['SambaOptsFile']],
     enable  => true,
   }
 
   if $manage_winbind {
-    service{ 'SambaWinBind':
+    service { 'SambaWinBind':
       ensure  => 'running',
       name    => $samba::params::servivewinbind,
-      require => [ Package['SambaClassic'], File['SambaOptsFile'] ],
+      require => [Package['SambaClassic'], File['SambaOptsFile']],
       enable  => true,
     }
   }
   $sambamode = 'classic'
   # Deploy /etc/sysconfig/|/etc/defaut/ file (startup options)
-  file{ 'SambaOptsFile':
+  file { 'SambaOptsFile':
     path    => $samba::params::sambaoptsfile,
     content => template($samba::params::sambaoptstmpl),
     require => Package['SambaClassic'],
@@ -272,14 +263,13 @@ class samba::classic(
     }
   }
 
-  file{ 'SambaCreateHome':
+  file { 'SambaCreateHome':
     path   => $samba::params::sambacreatehome,
     source => "puppet:///modules/${module_name}/smb-create-home.sh",
     mode   => '0755',
   }
 
-  $mandatoryglobaloptionsindex = prefix(keys($mandatoryglobaloptions),
-    '[global]')
+  $mandatoryglobaloptionsindex = prefix(keys($mandatoryglobaloptions), '[global]')
 
   if $manage_winbind {
     $services_to_notify = ['SambaSmb', 'SambaWinBind']
@@ -287,7 +277,7 @@ class samba::classic(
   else {
     $services_to_notify = ['SambaSmb']
   }
-  samba::option{ $mandatoryglobaloptionsindex:
+  samba::option { $mandatoryglobaloptionsindex:
     options         => $mandatoryglobaloptions,
     section         => 'global',
     settingsignored => $globaloptsexclude,
@@ -306,7 +296,7 @@ class samba::classic(
 
   # Iteration on global options
   $globaloptionsindex = prefix(keys($globaloptions), '[globalcustom]')
-  samba::option{ $globaloptionsindex:
+  samba::option { $globaloptionsindex:
     options => $globaloptions,
     section => 'global',
     require => Package['SambaClassic'],
@@ -331,12 +321,12 @@ class samba::classic(
         default => "createcomputer=\"${joinou}\"",
         undef   => '',
       }
-      exec{ 'Join Domain':
+      exec { 'Join Domain':
         path    => '/bin:/sbin:/usr/sbin:/usr/bin/',
         unless  => 'net ads testjoin',
         command => "echo '${adminpassword}'| net ads join -U '${adminuser}' ${ou}",
         notify  => Service['SambaWinBind'],
-        require => [ Package['SambaClassic'], Service['SambaSmb'] ],
+        require => [Package['SambaClassic'], Service['SambaSmb']],
       }
     }
   }
