@@ -61,7 +61,10 @@ class samba::classic (
     fail('realm must be a valid domain')
   }
 
-  validate_slength($smbname, 15)
+  if length($smbname) > 15 {
+    fail('smbname must be lesser or equal to 15 characters')
+  }
+
   if "${smbname}.${realm}" !~ Stdlib::Fqdn {
     fail('smbname must be a valid domain')
   }
