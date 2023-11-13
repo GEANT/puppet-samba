@@ -61,7 +61,7 @@ class samba::classic (
     fail('realm must be a valid domain')
   }
 
-  if length($smbname) > 15 {
+  if $smbname !~ String[1, 15] {
     fail('smbname must be lesser or equal to 15 characters')
   }
 
